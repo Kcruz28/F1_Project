@@ -191,15 +191,15 @@ def send_new_data(supabase: Client, new_rounds, dry_run=None, table_name=None):
     if not (isinstance(new_rounds, list) and all(isinstance(r, dict) for r in new_rounds)):
         raise TypeError("send_new_data expects a list[dict] shaped for the target table")
 
-    # Normalize keys to match the f1_data2 schema (lowercase for some fields)
+    # Normalize keys to match the f1_data2 schema (all lowercase)
     normalized = []
     for record in new_rounds:
         normalized.append({
-            "Year": record.get("Year"),
-            "EventName": record.get("EventName"),
-            "RoundNumber": record.get("RoundNumber"),
-            "Driver": record.get("Driver"),
-            "Team": record.get("Team"),
+            "year": record.get("Year"),
+            "eventname": record.get("EventName"),
+            "roundnumber": record.get("RoundNumber"),
+            "driver": record.get("Driver"),
+            "team": record.get("Team"),
             "qualifyingposition": record.get("QualifyingPosition"),
             "racepoints": record.get("RacePoints"),
             "raceposition": record.get("RacePosition"),
