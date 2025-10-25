@@ -11,7 +11,7 @@ logger.setLevel(logging.INFO)
 # Hardcoded settings (no env vars needed for these)
 FASTF1_CACHE_DIR = "/tmp/fastf1_cache"
 FASTF1_DELAY_SECONDS = 2.0
-TARGET_TABLE_DEFAULT = "f1data2"
+TARGET_TABLE_DEFAULT = "f1_data2"
 
 def _truthy_env(name: str) -> bool:
     val = os.environ.get(name, "").strip().lower()
@@ -172,8 +172,9 @@ def fetch_new_data(supabase_data):
 def send_new_data(supabase: Client, new_rounds, dry_run=None, table_name=None):
     """Insert new round records into Supabase.
 
-    Prefer a list[dict] like {'year': int, 'roundnumber': int}. If a list[int]
-    is provided, coerce to the expected shape for robustness.
+    Maps keys from fetch_new_data output to match the f1_data2 schema:
+    Year, EventName, RoundNumber, Driver, Team → Year, EventName, RoundNumber, Driver, Team
+    QualifyingPosition, RacePoints, RacePosition, SprintPoints → qualifyingposition, racepoints, raceposition, sprintpoints
     """
     if not new_rounds:
         logger.info("No new records to insert.")
@@ -190,9 +191,28 @@ def send_new_data(supabase: Client, new_rounds, dry_run=None, table_name=None):
     if not (isinstance(new_rounds, list) and all(isinstance(r, dict) for r in new_rounds)):
         raise TypeError("send_new_data expects a list[dict] shaped for the target table")
 
+    # Normalize keys to match the f1_data2 schema (lowercase for some fields)
+    normalized = []
+    for record in new_rounds:
+        normalized.append({
+            "Year": record.get("Year"),
+            "EventName": record.get("EventName"),
+            "RoundNumber": record.get("RoundNumber"),
+            "Driver": record.get("Driver"),
+            "Team": record.get("Team"),
+            "qualifyingposition": record.get("QualifyingPosition"),
+            "racepoints": record.get("RacePoints"),
+            "raceposition": record.get("RacePosition"),
+            "sprintpoints": record.get("SprintPoints"),
+        })
+    new_rounds = normalized
+
     # Dry-run: log and return without inserting
     if dry_run:
         logger.info(f"DRY RUN enabled. Would insert {len(new_rounds)} rows into '{table_name}'. Skipping DB write.")
+        if new_rounds:
+            logger.info(f"First record: {json.dumps(new_rounds[0], default=str)}")
+            logger.info(f"Record keys: {list(new_rounds[0].keys())}")
         return {
             'dry_run': True,
             'target_table': table_name,
@@ -201,6 +221,10 @@ def send_new_data(supabase: Client, new_rounds, dry_run=None, table_name=None):
         }
 
     try:
+        logger.info(f"About to insert {len(new_rounds)} rows into '{table_name}'.")
+        if new_rounds:
+            logger.info(f"First record: {json.dumps(new_rounds[0], default=str)}")
+            logger.info(f"Record keys: {list(new_rounds[0].keys())}")
         res = supabase.table(table_name).insert(new_rounds).execute()
         logger.info(f"Inserted {len(new_rounds)} rows into '{table_name}'.")
         return res
